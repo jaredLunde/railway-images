@@ -2,15 +2,18 @@ package imagor
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
+	"hash"
 	"os"
 	"time"
 
 	i "github.com/cshum/imagor"
 	"github.com/cshum/imagor/imagorpath"
-	"github.com/cshum/imagor/loader/httploader"
 	"github.com/cshum/imagor/storage/filestorage"
 	"github.com/cshum/imagor/vips"
+	"github.com/jaredLunde/railway-images/internal/app/imagor/httploader"
 	"github.com/jaredLunde/railway-images/internal/app/keyval"
 )
 
@@ -57,20 +60,14 @@ func New(ctx context.Context, cfg Config) (*i.Imagor, error) {
 			httploader.WithBlockPrivateNetworks(false),
 			httploader.WithBlockLinkLocalNetworks(false),
 			httploader.WithBlockNetworks(),
+			httploader.WithUserAgent("RailwayImagesClient/1.0 (Platform: Linux; Architecture: x64)"),
 		))
 	}
-
-	// if false {
-	// 	loaders = append(loaders, s3storage.New())
-	// }
-	// if false {
-	// 	loaders = append(loaders, gcloudstorage.New())
-	// }
 
 	imagorService := i.New(
 		i.WithLoaders(loaders...),
 		i.WithProcessors(vips.NewProcessor()),
-		i.WithSigner(imagorpath.NewHMACSigner(sha256.New, 0, cfg.SignSecret)),
+		i.WithSigner(NewHMACSigner(sha256.New, 0, cfg.SignSecret)),
 		i.WithBasePathRedirect(""),
 		i.WithBaseParams(""),
 		i.WithRequestTimeout(cfg.RequestTimeout),
@@ -102,4 +99,28 @@ func New(ctx context.Context, cfg Config) (*i.Imagor, error) {
 	}
 
 	return imagorService, nil
+}
+
+func NewHMACSigner(alg func() hash.Hash, truncate int, secret string) imagorpath.Signer {
+	return &hmacSigner{
+		alg:      alg,
+		truncate: truncate,
+		secret:   []byte(secret),
+	}
+}
+
+type hmacSigner struct {
+	alg      func() hash.Hash
+	truncate int
+	secret   []byte
+}
+
+func (s *hmacSigner) Sign(path string) string {
+	h := hmac.New(s.alg, s.secret)
+	h.Write([]byte(path))
+	sig := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(h.Sum(nil))
+	if s.truncate > 0 && len(sig) > s.truncate {
+		return sig[:s.truncate]
+	}
+	return sig
 }

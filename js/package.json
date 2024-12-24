@@ -1,0 +1,63 @@
+{
+	"name": "railway-images",
+	"version": "0.1.0",
+	"description": "JavaScript and React packages for the railway-images template",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jaredLunde/railway-images.git"
+	},
+	"keywords": ["react", "railway", "railway", "template", "react", "image"],
+	"author": "Jared Lunde",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/jaredLunde/railway-images/issues"
+	},
+	"homepage": "https://github.com/jaredLunde/railway-images#readme",
+	"sideEffects": false,
+	"main": "dist/index.js",
+	"module": "dist/index.mjs",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.mjs",
+			"module": "./dist/index.mjs",
+			"types": "./dist/index.d.mts",
+			"default": "./dist/index.js"
+		},
+		"./server": {
+			"import": "./dist/server.mjs",
+			"module": "./dist/server.mjs",
+			"types": "./dist/server.d.ts",
+			"default": "./dist/server.js"
+		},
+		"./react": {
+			"import": "./dist/react.mjs",
+			"module": "./dist/react.mjs",
+			"types": "./dist/react.d.ts",
+			"default": "./dist/react.js"
+		},
+		"./*": {
+			"import": "./dist/*.mjs",
+			"module": "./dist/*.mjs",
+			"types": "./dist/*.d.ts",
+			"default": "./dist/*.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"@types/react": "^19.0.2",
+		"jotai": "^2.11.0",
+		"react": "^19.0.0",
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.8"
+	},
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsup --watch",
+		"check": "npm run check:types",
+		"check:types": "tsc --noEmit --incremental --tsBuildInfoFile .typescript/tsconfig.tsbuildinfo",
+		"test": "vitest"
+	}
+}

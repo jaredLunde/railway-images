@@ -98,7 +98,7 @@ func (c *Client) Sign(path string) (string, error) {
 }
 
 // Get a file from the storage server
-func (c *Client) Get(key string) (io.ReadCloser, error) {
+func (c *Client) Get(key string) (*http.Response, error) {
 	u := *c.URL
 	path, err := url.JoinPath("/files", key)
 	if err != nil {
@@ -115,7 +115,7 @@ func (c *Client) Get(key string) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	return res.Body, nil
+	return res, nil
 }
 
 // Put a file to the storage server

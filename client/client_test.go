@@ -214,13 +214,13 @@ func TestClient_Get(t *testing.T) {
 		transport: http.DefaultTransport,
 	}
 
-	body, err := client.Get("/test.jpg")
+	res, err := client.Get("/test.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer body.Close()
+	defer res.Body.Close()
 
-	content, err := io.ReadAll(body)
+	content, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}

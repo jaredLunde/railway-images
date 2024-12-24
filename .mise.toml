@@ -8,11 +8,12 @@ LEVELDB_PATH = "./data/db"
 dprint = "0.47.2"
 watchexec = "2.1.2"
 go = "1.23.1"
+node = "22"
 "go:honnef.co/go/tools/cmd/staticcheck" = "0.6.0-0.dev"
 
 [tasks."setup"]
 description = "Setup the project"
-run = ["mise install", "go mod download", "go mod tidy"]
+run = ["mise install", "go mod download", "go mod tidy", "cd js && npm install"]
 sources = ["go.mod", ".mise.toml", "*/**/*.go"]
 outputs = ["go.sum"]
 
@@ -35,11 +36,15 @@ run = "dprint check"
 
 [tasks."check:lint"]
 description = "Check linting"
-run = "staticcheck ./..."
+run = ["staticcheck ./...", "cd js && npm run check:types"]
 
 [tasks."test:unit"]
 description = "Run unit tests"
-run = "go test ./... -short"
+run = ["go test ./... -short", "cd js && npm run test -- run"]
+
+[tasks."build:js"]
+description = "Build the JS bundle"
+run = "cd js && npm run build"
 
 [tasks."default"]
 hide = true

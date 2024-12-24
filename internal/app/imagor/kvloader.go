@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/cshum/imagor"
 	"github.com/cshum/imagor/imagorpath"
@@ -26,7 +25,6 @@ type KVStorage struct {
 	WritePermission os.FileMode
 	SaveErrIfExists bool
 	SafeChars       string
-	Expiration      time.Duration
 
 	safeChars imagorpath.SafeChars
 }
@@ -50,6 +48,9 @@ func (s *KVStorage) Path(image string) (string, bool) {
 	if !strings.HasPrefix(image, "/") {
 		key = append([]byte("/"), key...)
 	}
+	if !strings.HasPrefix(image, "files/") && !strings.HasPrefix(image, "/files/") {
+		return "", false
+	}
 	return filepath.Join(s.PathPrefix, keyval.KeyToPath(key)), true
 }
 
@@ -59,13 +60,10 @@ func (s *KVStorage) Get(_ *http.Request, image string) (*imagor.Blob, error) {
 	if !ok {
 		return nil, imagor.ErrInvalid
 	}
-
-	return imagor.NewBlobFromFile(image, func(stat os.FileInfo) error {
-		if s.Expiration > 0 && time.Since(stat.ModTime()) > s.Expiration {
-			return imagor.ErrExpired
-		}
+	f := imagor.NewBlobFromFile(image, func(stat os.FileInfo) error {
 		return nil
-	}), nil
+	})
+	return f, nil
 }
 
 // Put implements imagor.Storage interface

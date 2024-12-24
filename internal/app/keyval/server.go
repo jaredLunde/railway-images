@@ -1,13 +1,16 @@
 package keyval
 
 import (
+	"bytes"
 	"crypto/md5"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/gofiber/fiber/v3"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/valyala/fasthttp"
@@ -112,43 +115,99 @@ func (k *KeyVal) Delete(key []byte, unlink bool) int {
 
 	// 204, all good
 	return fiber.StatusNoContent
-
 }
 
-func (k *KeyVal) Write(key []byte, value io.Reader, valueLen int64) int {
-	// push to leveldb initially as deleted, and without a hash since we don't have it yet
-	if err := k.PutRecord(key, Record{SOFT, ""}); err != nil {
-		k.log.Error("failed to put record", "error", err)
-		return fiber.StatusInternalServerError
+func (k *KeyVal) Write(key []byte, value io.Reader, valueLen int) int {
+	if valueLen > k.maxFileSize {
+		return fiber.StatusRequestEntityTooLarge
 	}
 
-	// If the file already exists, overwrite it. Otherwise create it and write to it.
+	succeeded := false
+	recordNotFound := k.GetRecord(key).Deleted == HARD
+	if recordNotFound {
+		if err := k.PutRecord(key, Record{SOFT, ""}); err != nil {
+			k.log.Error("failed to put record", "error", err)
+			return fiber.StatusInternalServerError
+		}
+	}
+
+	defer func() {
+		if !succeeded && recordNotFound {
+			k.db.Delete(key, nil)
+		}
+	}()
+
 	fp := filepath.Join(k.volume, KeyToPath(key))
 	if err := os.MkdirAll(filepath.Dir(fp), 0755); err != nil {
 		k.log.Error("failed to create directory", "error", err)
 		return fiber.StatusInternalServerError
 	}
 
-	f, err := os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0600)
+	tmpFile, err := os.CreateTemp(filepath.Dir(fp), "tmp-*")
 	if err != nil {
-		k.log.Error("failed to open file", "error", err)
+		k.log.Error("failed to create temp file", "error", err)
 		return fiber.StatusInternalServerError
 	}
-	defer f.Close()
+	defer os.Remove(tmpFile.Name()) // Clean up temp file on any error
+	defer tmpFile.Close()
 
 	h := md5.New()
 	buf := make([]byte, 32*1024)
-	if _, err := io.CopyBuffer(f, io.TeeReader(value, h), buf); err != nil {
-		return fiber.StatusInternalServerError
+	limitedReader := io.LimitReader(value, int64(k.maxFileSize+1))
+	teeReader := io.TeeReader(limitedReader, h)
+	prefix := make([]byte, 512)
+	n, _ := io.ReadFull(teeReader, prefix)
+	if n == 0 {
+		return fiber.StatusBadRequest
 	}
+
+	mtype := mimetype.Detect(prefix[:n])
+	var validType bool
+	for _, allowed := range k.allowedMimeTypes {
+		if strings.HasPrefix(mtype.String(), allowed) {
+			validType = true
+			break
+		}
+	}
+	if !validType {
+		return fiber.StatusUnsupportedMediaType
+	}
+
+	// Combine the prefix we read with the remaining stream
+	combined := io.MultiReader(bytes.NewReader(prefix[:n]), teeReader)
+	written, err := io.CopyBuffer(tmpFile, combined, buf)
+	if err != nil {
+		if err != io.EOF {
+			return fiber.StatusInternalServerError
+		}
+	}
+
+	// Check if we hit the size limit
+	if written >= int64(k.maxFileSize) {
+		return fiber.StatusRequestEntityTooLarge
+	}
+
 	hash := fmt.Sprintf("%x", h.Sum(nil))
 
-	// push to leveldb as existing
+	// Sync temporary file to disk
+	if err := tmpFile.Sync(); err != nil {
+		k.log.Error("failed to sync temp file", "error", err)
+		return fiber.StatusInternalServerError
+	}
+
+	tmpFile.Close()
+	if err := os.Rename(tmpFile.Name(), fp); err != nil {
+		k.log.Error("failed to move temp file", "error", err)
+		return fiber.StatusInternalServerError
+	}
+
+	// Push to leveldb as existing
 	if err := k.PutRecord(key, Record{NO, hash}); err != nil {
 		k.log.Error("failed to put record", "error", err)
 		return fiber.StatusInternalServerError
 	}
 
+	succeeded = true
 	// 201, all good
 	return fiber.StatusCreated
 }
@@ -209,7 +268,7 @@ func (k *KeyVal) ServeHTTP(c fiber.Ctx) error {
 			return nil
 		}
 
-		status := k.Write(key, c.Request().BodyStream(), int64(c.Request().Header.ContentLength()))
+		status := k.Write(key, c.Request().BodyStream(), c.Request().Header.ContentLength())
 		c.Status(status)
 
 	case fiber.MethodDelete:

@@ -26,7 +26,7 @@ type Config struct {
 	// Used for securing the key value storage API
 	SecretKey string `env:"SECRET_KEY" envDefault:"password"`
 	// Used for signing URLs
-	SignatureSecretKey string `env:"SIGNATURE_SECRET_KEY" envDefault:""`
+	SignatureSecretKey string `env:"SIGNATURE_SECRET_KEY" envDefault:"secret"`
 
 	// A comma-separated list of allowed URL sources
 	ServeAllowedHTTPSources string `env:"SERVE_ALLOWED_HTTP_SOURCES" envDefault:"*"`

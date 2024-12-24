@@ -46,13 +46,15 @@ func main() {
 	})
 
 	kvService, err := keyval.New(keyval.Config{
-		BasePath:    "/files",
-		UploadPath:  cfg.UploadPath,
-		LevelDBPath: cfg.LevelDBPath,
-		SoftDelete:  true,
-		SignSecret:  cfg.SignatureSecretKey,
-		Logger:      log,
-		Debug:       debug,
+		BasePath:         "/files",
+		UploadPath:       cfg.UploadPath,
+		LevelDBPath:      cfg.LevelDBPath,
+		SoftDelete:       true,
+		SignSecret:       cfg.SignatureSecretKey,
+		MaxSize:          cfg.MaxUploadSize,
+		AllowedMimeTypes: []string{"image/"},
+		Logger:           log,
+		Debug:            debug,
 	})
 	if err != nil {
 		log.Error("keyval app failed to start", "error", err)
@@ -84,7 +86,7 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		StrictRouting:     true,
-		BodyLimit:         cfg.MaxUploadSize,
+		BodyLimit:         cfg.MaxUploadSize, // This doesn't actually work with StreamBodyRequest, but it's here for good times
 		WriteTimeout:      cfg.RequestTimeout,
 		ReadTimeout:       cfg.RequestTimeout,
 		StreamRequestBody: true,
@@ -105,7 +107,11 @@ func main() {
 	verifyAPIKey := mw.NewVerifyAPIKey(cfg.SecretKey)
 	verifyAccess := mw.NewVerifyAccess(cfg.SecretKey, cfg.SignatureSecretKey)
 	app.Use(mw.NewRealIP())
-	app.Use(helmet.New(helmet.Config{HSTSPreloadEnabled: true, HSTSMaxAge: 31536000}))
+	app.Use(helmet.New(helmet.Config{
+		HSTSPreloadEnabled:        true,
+		HSTSMaxAge:                31536000,
+		CrossOriginResourcePolicy: "cross-origin",
+	}))
 	app.Use(fiberrecover.New(fiberrecover.Config{EnableStackTrace: cfg.Environment == EnvironmentDevelopment}))
 	app.Use(favicon.New())
 	app.Use(requestid.New())

@@ -10,13 +10,15 @@ import (
 )
 
 type Config struct {
-	UploadPath  string
-	LevelDBPath string
-	SoftDelete  bool
-	SignSecret  string
-	BasePath    string
-	Logger      *slog.Logger
-	Debug       bool
+	UploadPath       string
+	LevelDBPath      string
+	SoftDelete       bool
+	SignSecret       string
+	BasePath         string
+	MaxSize          int
+	AllowedMimeTypes []string
+	Logger           *slog.Logger
+	Debug            bool
 }
 
 func New(cfg Config) (*KeyVal, error) {
@@ -27,27 +29,31 @@ func New(cfg Config) (*KeyVal, error) {
 	}
 
 	return &KeyVal{
-		db:         db,
-		lock:       map[string]struct{}{},
-		softDelete: cfg.SoftDelete,
-		volume:     cfg.UploadPath,
-		signSecret: cfg.SignSecret,
-		basePath:   cfg.BasePath,
-		log:        cfg.Logger,
-		debug:      cfg.Debug,
+		db:               db,
+		lock:             map[string]struct{}{},
+		softDelete:       cfg.SoftDelete,
+		volume:           cfg.UploadPath,
+		signSecret:       cfg.SignSecret,
+		basePath:         cfg.BasePath,
+		maxFileSize:      cfg.MaxSize,
+		allowedMimeTypes: cfg.AllowedMimeTypes,
+		log:              cfg.Logger,
+		debug:            cfg.Debug,
 	}, nil
 }
 
 type KeyVal struct {
-	db         *leveldb.DB
-	mlock      sync.Mutex
-	lock       map[string]struct{}
-	log        *slog.Logger
-	signSecret string
-	volume     string
-	basePath   string
-	softDelete bool
-	debug      bool
+	db               *leveldb.DB
+	mlock            sync.Mutex
+	lock             map[string]struct{}
+	log              *slog.Logger
+	signSecret       string
+	volume           string
+	basePath         string
+	maxFileSize      int
+	allowedMimeTypes []string
+	softDelete       bool
+	debug            bool
 }
 
 func (k *KeyVal) Close() error {
